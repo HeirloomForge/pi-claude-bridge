@@ -1,5 +1,7 @@
 # pi-claude-bridge
 
+HeirloomForge maintains this fork for external compaction ownership and overflow recovery. See [FORK.md](FORK.md) for installation and upstream updates.
+
 [![npm version](https://img.shields.io/npm/v/pi-claude-bridge)](https://www.npmjs.com/package/pi-claude-bridge)
 
 Pi extension that integrates Claude Code via the [Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript). Based initially on [claude-agent-sdk-pi](https://github.com/prateekmedia/claude-agent-sdk-pi) by Prateek Sunal. This fork adds streaming, MCP tool bridging, custom pi tool bridging, session resume/persistence, context sync, thinking support, skills forwarding, and many correctness fixes.
@@ -91,6 +93,7 @@ Config: `~/.pi/agent/claude-bridge.json` (global) or the project Pi config direc
 - `longContextExtraUsage` — set to `true` to enable 1M context models even if they cost money through Extra Usage on your plan. It enables Sonnet 4.6 with 1M on every plan and Opus 4.6 with 1M on Pro. Not needed for Opus 4.7 or 4.8.
 - `forceTwoHundredK` — array of model ids to pin to 200K context (bare id, no `[1m]` suffix). Use if pi-ai declares a model at 1M but Claude Code won't serve it on your plan.
 - `strictMcpConfig` — block MCP servers from `~/.claude.json` / `.mcp.json` (default `true`). Cloud MCP (Gmail/Drive via claude.ai OAuth) is always blocked.
+- `takeOverCompaction` — default `false` in this HeirloomForge fork. Our local workstation extension owns compaction; the bridge leaves `session_before_compact` untouched while still rebuilding its Claude session and supporting automatic continuation afterward. Set `true` only to explicitly restore upstream's Claude compaction handler. This does not change `/tree` branch summarization.
 - `autoMemoryEnabled` — enable Claude Code's auto-memory system (default `false`)
 - `pathToClaudeCodeExecutable` — path to the `claude` binary. Useful if your OS/filesystem has the SDK's bundled musl/glibc binaries in a place where they can't run. For example, with Nix you can set the binary to e.g. `"/home/you/.nix-profile/bin/claude"`.
 

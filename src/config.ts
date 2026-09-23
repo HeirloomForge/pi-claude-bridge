@@ -24,6 +24,8 @@ export interface Config {
 	/** Low-level Claude Agent SDK plumbing. Most users won't need these. */
 	provider?: {
 		strictMcpConfig?: boolean;
+		/** Explicitly opt into bridge compaction. Default false in the HeirloomForge fork. */
+		takeOverCompaction?: boolean;
 		autoMemoryEnabled?: boolean;
 		pathToClaudeCodeExecutable?: string;
 		// Subscription plan tier. Setting to "max" enables Opus 4.6 at 1M context

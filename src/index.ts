@@ -228,6 +228,8 @@ function readCarriedAttachments(sessionId: string, cwd: string): CarriedAttachme
 }
 
 let sharedSession: SessionState | null = null;
+// Pi retries an interrupted turn after overflow compaction without a new user message.
+let retryAfterCompaction = false;
 
 // Convert pi messages to Anthropic API format for session import.
 // Lossy: only text, thinking and toolCall blocks survive, and thinking only when
@@ -1580,7 +1582,9 @@ function streamClaudeAgentSdk(model: Model<any>, context: Context, options?: Sim
 	// The query is gone but pi still delivered the result. Nothing to do — just
 	// emit end_turn so pi waits for the next real user message.
 	const lastMsg = context.messages[context.messages.length - 1];
-	if (lastMsg?.role === "toolResult") {
+	const recoveringToolResult = retryAfterCompaction && lastMsg?.role === "toolResult";
+	retryAfterCompaction = false;
+	if (lastMsg?.role === "toolResult" && !recoveringToolResult) {
 		debug(`provider: orphaned tool result after abort, emitting end_turn`);
 		if (sharedSession && activeQueryContexts.size === 0) sharedSession.cursor = context.messages.length;
 		// No query owns this result, so there is no context to reset: resetTurnState
@@ -1639,10 +1643,17 @@ function streamClaudeAgentSdk(model: Model<any>, context: Context, options?: Sim
 	// cliModel is the actual id sent to Claude Code (may carry [1m]); model.id is the
 	// pi-registered id. Log cliModel so debug lines reflect what CC actually received.
 	const cliModel = claudeCodeModelId(model, longContextSettings);
-	const syncResult = syncSharedSession(context.messages, cwd, customToolNameToSdk, cliModel);
+	// The fresh-query importer excludes the current user turn. Supply a separate
+	// continuation turn so it imports ALL retained tool calls/results, rather than
+	// replaying the older user request and dropping work already done. Keep Pi's
+	// original message count for cursor accounting; this prompt is SDK-local.
+	const requestMessages: Context["messages"] = recoveringToolResult
+		? [...context.messages, { role: "user", content: "Continue the interrupted task from the retained tool results and compaction summary. Do not repeat completed tool calls.", timestamp: Date.now() }]
+		: context.messages;
+	const syncResult = syncSharedSession(requestMessages, cwd, customToolNameToSdk, cliModel);
 	const { sessionId: resumeSessionId } = syncResult;
-	const promptBlocks = extractUserPromptBlocks(context.messages);
-	let promptText = extractUserPrompt(context.messages) ?? "";
+	const promptBlocks = extractUserPromptBlocks(requestMessages);
+	let promptText = extractUserPrompt(requestMessages) ?? "";
 
 	// Guard: empty prompt means the last context message isn't a user message.
 	// This should never happen with per-query state — dump diagnostics if it does.
@@ -2088,6 +2099,7 @@ export default function (pi: ExtensionAPI) {
 
 	// Reset shared session on pi session lifecycle events
 	const clearSession = (event: string) => {
+		retryAfterCompaction = false;
 		debug(`${event}: clearing session ${sharedSession?.sessionId?.slice(0, 8) ?? "none"}`);
 		sharedSession = null;
 
@@ -2168,7 +2180,9 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_before_compact", async (event, ctx) => {
-		if (ctx.model?.baseUrl !== "claude-bridge") return undefined;
+		// HeirloomForge default: the local compactor owns this event. Upstream
+		// takeover is available only through an explicit opt-in.
+		if (providerSettings.takeOverCompaction !== true || ctx.model?.baseUrl !== "claude-bridge") return undefined;
 		debug(
 			`session_before_compact: takeover reason=${event.reason} willRetry=${event.willRetry} ` +
 			`isSplitTurn=${event.preparation.isSplitTurn} messages=${event.preparation.messagesToSummarize.length} ` +
@@ -2213,8 +2227,14 @@ export default function (pi: ExtensionAPI) {
 			sharedSession = { ...sharedSession, needsRebuild: true };
 		}
 	};
-	pi.on("session_compact", (event) => markRebuild(`session_compact:${event.reason}:willRetry=${event.willRetry}`));
-	pi.on("session_tree", () => markRebuild("session_tree"));
+	pi.on("session_compact", (event) => {
+		retryAfterCompaction = event.willRetry;
+		markRebuild(`session_compact:${event.reason}:willRetry=${event.willRetry}`);
+	});
+	pi.on("session_tree", () => {
+		retryAfterCompaction = false;
+		markRebuild("session_tree");
+	});
 
 	// Branch summarization — rewind or fork-at-point with "summarize" — is the other
 	// place pi asks the model for a summary, and unlike compaction it runs through
