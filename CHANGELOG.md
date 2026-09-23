@@ -2,6 +2,8 @@
 
 ## UNRELEASED
 
+- **Bump: patched transitive dependencies (TIDY-19202)** — refresh the lockfile within existing version ranges to resolve the seven npm audit findings reported during fork installation.
+
 - **Fix: resume after overflow compaction (TIDY-19202)** — distinguish Pi's explicit compact-and-retry from an orphaned tool result. Rebuild all retained tool history before issuing a continuation, rather than silently returning an empty stop. Covered by offline provider tests and a live Claude checkpoint probe.
 - **Add: external compaction ownership (TIDY-19202)** — `provider.takeOverCompaction` defaults to `false` in the HeirloomForge fork, so a local compaction extension supplies the summary without the bridge running a second Claude summary and overwriting it. Restoring the upstream handler requires explicit `true`.
 

@@ -9,6 +9,7 @@ Our changes are limited to:
 - Resuming retained tool-result history after Pi's explicit compact-and-retry.
 - Defaulting `provider.takeOverCompaction` to `false`. Our workstation compactor owns session compaction. Setting it to `true` explicitly restores upstream behavior.
 - Regression tests and this documentation.
+- Patched transitive dependencies within upstream's declared version ranges.
 
 This setting covers manual and automatic session compaction, including overflow recovery. It does not route `/tree` branch summaries or `/bug` reports to the local model. Claude Code's own auto-compaction remains disabled through `DISABLE_AUTO_COMPACT=1`.
 
