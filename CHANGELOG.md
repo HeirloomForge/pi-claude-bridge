@@ -2,6 +2,8 @@
 
 ## UNRELEASED
 
+- **Add: Bridge-native subscription usage bars** — publish five-hour and weekly utilization and reset countdowns to Powerbar from the existing Claude Code SDK stream only. No credential reads, direct usage endpoint requests, or additional model calls. Missing or expired observations show `?`, and bars clear when switching away from the Bridge. Enable the dedicated segments as described in FORK.md.
+
 - **Bump: patched transitive dependencies (TIDY-19202)** — refresh the lockfile within existing version ranges to resolve the seven npm audit findings reported during fork installation.
 
 - **Fix: resume after overflow compaction (TIDY-19202)** — distinguish Pi's explicit compact-and-retry from an orphaned tool result. Rebuild all retained tool history before issuing a continuation, rather than silently returning an empty stop. Covered by offline provider tests and a live Claude checkpoint probe.

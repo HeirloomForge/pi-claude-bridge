@@ -26,6 +26,11 @@ import { createToolServer } from "./mcp-server.js";
 import { buildActionSummary, type ToolCallState } from "./askclaude-ui.js";
 import { askClaudeCallTags, askClaudeToolDescription, buildAskClaudeParams, resolveAskClaudeDefaults, resolveAskClaudeMode, type AskClaudeMode } from "./askclaude-schema.js";
 import { nonSystemMessages, toBridgeContext } from "./transcript.js";
+import { SubscriptionUsage } from "./subscription-usage.js";
+
+// A shared provider can serve several extension runtimes. Headless children must
+// not replace or shut down the parent TUI's observer.
+const subscriptionObservers = new Set<SubscriptionUsage>();
 
 // --- Debug logging ---
 // CLAUDE_BRIDGE_DEBUG=1 enables debug logging to ~/.pi/agent/claude-bridge.log
@@ -1352,6 +1357,7 @@ async function consumeQuery(
 		if (message.type === "rate_limit_event") {
 			const info = (message as any).rate_limit_info;
 			debug("consumeQuery: rate_limit_event", JSON.stringify(info).slice(0, 300));
+			for (const observer of subscriptionObservers) observer.record(info);
 			if (info?.status === "rejected") {
 				// Held so the failure Claude Code sends next can be named as a rate limit.
 				queryCtx.rateLimitRejection = info;
@@ -2070,6 +2076,7 @@ const PREVIEW_MAX_LINES = 6;
 let askClaudeToolName = "AskClaude";
 
 export default function (pi: ExtensionAPI) {
+	const subscriptionUsage = new SubscriptionUsage();
 	// Disable non-essential Claude Code traffic (update checks, MCP registry, telemetry)
 	process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
 
@@ -2115,10 +2122,15 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", (event, ctx) => {
 		piUI = ctx.ui;
 		piMode = ctx.mode;
+		subscriptionUsage.start(pi, ctx);
+		if (ctx.mode === "tui") subscriptionObservers.add(subscriptionUsage);
+		else subscriptionObservers.delete(subscriptionUsage);
 		if (event.reason === "new" || event.reason === "resume" || event.reason === "fork") {
 			clearSession(`session_start:${event.reason}`);
 		}
 	});
+	pi.on("model_select", (_event, ctx) => subscriptionUsage.select(ctx));
+	pi.on("turn_end", () => subscriptionUsage.refresh());
 	// `--system-prompt` replaces pi's default rather than adding to it, but Claude
 	// Code's preset carries its own tool and permission guidance that the bridge
 	// still depends on, so both flags are forwarded as an append.
@@ -2175,6 +2187,8 @@ export default function (pi: ExtensionAPI) {
 		recordSystemPrompt("turn_start", ctx.getSystemPrompt(), lastSystemPromptOptions);
 	});
 	pi.on("session_shutdown", () => {
+		subscriptionObservers.delete(subscriptionUsage);
+		subscriptionUsage.stop();
 		reportLeaks("session_shutdown");
 		clearSession("session_shutdown");
 	});
