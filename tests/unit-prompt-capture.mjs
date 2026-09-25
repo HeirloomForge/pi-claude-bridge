@@ -260,6 +260,49 @@ describe("PromptCaptures", () => {
 	});
 });
 
+describe("tool guidelines", () => {
+	const toolGuidelines = {
+		edit: ["Use one edit call with multiple entries in edits[]"],
+		bash: ["You can inspect PI_* environment variables"],
+		powershell: ["You can inspect PI_* environment variables"],
+		ci_watch: ["After scripts/land.sh pushes, call ci_watch action=watch"],
+	};
+
+	it("forwards each exposed tool's guidelines once, and nothing for tools Claude Code does not get", () => {
+		const captures = new PromptCaptures();
+		captures.record(PARENT_KEY, capture({ toolGuidelines, promptGuidelines: ["Extension-wide rule"] }));
+		const result = projectPromptCapture(captures.resolve(PARENT_KEY), {
+			skillReadTool: "mcp",
+			exposedTools: ["edit", "bash", "powershell"],
+		});
+		assert.match(result, /available as mcp__custom-tools__<name>/);
+		assert.match(result, /^- Extension-wide rule$/m);
+		assert.match(result, /^- Use one edit call with multiple entries in edits\[\]$/m);
+		assert.equal(occurrences(result, "PI_* environment variables"), 1);
+		assert.doesNotMatch(result, /ci_watch/);
+	});
+
+	it("does not repeat a parent's guidelines in a sub-agent, which still starts with the parent's projection", () => {
+		const captures = new PromptCaptures();
+		captures.record(PARENT_KEY, capture({ contextFiles: [{ path: "/AGENTS.md", content: "parent rules" }], toolGuidelines }));
+		captures.record(CHILD_KEY, capture({ custom: `${PARENT_KEY}${CHILD_SUFFIX}`, toolGuidelines }));
+		const options = { skillReadTool: "mcp", exposedTools: ["edit", "ci_watch"] };
+		const parent = projectPromptCapture(captures.resolve(PARENT_KEY), options);
+		const child = projectPromptCapture(captures.resolve(CHILD_KEY), options);
+		assert.ok(child.startsWith(parent));
+		assert.equal(occurrences(child, "call ci_watch action=watch"), 1);
+	});
+
+	it("refuses a guideline carrying the phrase pair the subscription gate rejects", () => {
+		const captures = new PromptCaptures();
+		captures.record(PARENT_KEY, capture({ toolGuidelines: { read: ["See docs/custom-provider.md and docs/packages.md"] } }));
+		assert.throws(
+			() => projectPromptCapture(captures.resolve(PARENT_KEY), { skillReadTool: "mcp", exposedTools: ["read"] }),
+			/refusing to send this prompt[\s\S]*the tool guidelines/,
+		);
+	});
+});
+
 describe("capture provenance", () => {
 	it("records which boundary last wrote a key", () => {
 		const captures = new PromptCaptures();

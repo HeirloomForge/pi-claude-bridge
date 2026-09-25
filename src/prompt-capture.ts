@@ -1,6 +1,6 @@
 import type { Skill } from "@earendil-works/pi-coding-agent";
 import { formatProjectContext } from "./agents-md.js";
-import { renderSkillsBlock, type SkillReadTool } from "./skills.js";
+import { MCP_TOOL_PREFIX, renderSkillsBlock, type SkillReadTool } from "./skills.js";
 
 // What pi assembled for one agent, kept so the bridge can append only the
 // portable parts after Claude Code's own preset.
@@ -10,6 +10,10 @@ export type PromptCaptureInput = {
 	append?: string;
 	contextFiles: { path: string; content: string }[];
 	skills: Skill[];
+	/** Guideline bullets each pi tool contributes to pi's rules section, by pi tool name. */
+	toolGuidelines?: Record<string, string[]>;
+	/** Guideline bullets extensions add to pi's rules section, not tied to a tool. */
+	promptGuidelines?: string[];
 };
 
 type InheritedPrompt = {
@@ -86,6 +90,8 @@ export class PromptCaptures {
 		capture.append = input.append;
 		capture.contextFiles = input.contextFiles.map((file) => ({ ...file }));
 		capture.skills = [...input.skills];
+		capture.toolGuidelines = input.toolGuidelines ? { ...input.toolGuidelines } : undefined;
+		capture.promptGuidelines = input.promptGuidelines ? [...input.promptGuidelines] : undefined;
 		capture.source = source;
 		if (!existing || customChanged) {
 			capture.inherited = this.findInheritedPrompts(systemPrompt, input.custom);
@@ -270,7 +276,7 @@ export function sharedPromptCaptures(onDiagnose?: (diagnostic: PromptCaptureDiag
 
 export function projectPromptCapture(
 	capture: PromptCapture,
-	options: { skillReadTool: SkillReadTool },
+	options: ProjectionOptions,
 ): string | undefined {
 	return projectCapture(capture, options, new Set());
 }
@@ -300,9 +306,43 @@ export function collectPromptSkills(capture: PromptCapture): Skill[] {
 	return result;
 }
 
+export type ProjectionOptions = {
+	skillReadTool: SkillReadTool;
+	/** Pi names of the tools this query exposes to Claude Code. A tool's guidelines
+	 *  are forwarded only while the tool itself is. */
+	exposedTools?: readonly string[];
+};
+
+/** The guideline bullets one capture contributes: extension-wide ones, then each
+ *  exposed tool's, deduplicated (pi gives bash and powershell the same bullet). */
+function guidelineBullets(capture: PromptCapture, exposedTools: readonly string[] | undefined): string[] {
+	const exposed = new Set(exposedTools ?? []);
+	const bullets = [
+		...(capture.promptGuidelines ?? []),
+		...Object.entries(capture.toolGuidelines ?? {}).flatMap(([tool, rules]) => (exposed.has(tool) ? rules : [])),
+	];
+	return [...new Set(bullets.map((bullet) => bullet.trim()).filter(Boolean))];
+}
+
+function collectGuidelines(capture: PromptCapture, exposedTools: readonly string[] | undefined, into: Set<string>): Set<string> {
+	for (const edge of capture.inherited) collectGuidelines(edge.parent, exposedTools, into);
+	for (const bullet of guidelineBullets(capture, exposedTools)) into.add(bullet);
+	return into;
+}
+
+/** Pi's rules section minus its generic lines: only what a tool or an extension asked
+ *  the model to do. Tool names in the bullets are pi's; say how they appear here. */
+function renderGuidelinesBlock(bullets: readonly string[]): string | undefined {
+	if (bullets.length === 0) return undefined;
+	return [
+		`Tool guidelines. A tool named below is available as ${MCP_TOOL_PREFIX}<name> (for example, edit is ${MCP_TOOL_PREFIX}edit):`,
+		...bullets.map((bullet) => `- ${bullet}`),
+	].join("\n");
+}
+
 function projectCapture(
 	capture: PromptCapture,
-	options: { skillReadTool: SkillReadTool },
+	options: ProjectionOptions,
 	visiting: Set<PromptCapture>,
 ): string | undefined {
 	if (visiting.has(capture)) throw new Error("Cyclic prompt inheritance");
@@ -320,6 +360,12 @@ function projectCapture(
 			return true;
 		});
 
+		const inheritedGuidelines = new Set<string>();
+		for (const edge of capture.inherited) collectGuidelines(edge.parent, options.exposedTools, inheritedGuidelines);
+		const guidelines = renderGuidelinesBlock(
+			guidelineBullets(capture, options.exposedTools).filter((bullet) => !inheritedGuidelines.has(bullet)),
+		);
+
 		const custom = projectCustom(capture, options, visiting);
 		const parts: PromptPart[] = [];
 		const context = formatProjectContext(capture.contextFiles);
@@ -328,6 +374,9 @@ function projectCapture(
 		if (skills) parts.push({ label: "the skills block", text: skills });
 		if (custom) parts.push({ label: "the custom prompt", text: custom });
 		if (capture.append) parts.push({ label: "the appended instructions", text: capture.append });
+		// Last, so a sub-agent's projection still starts with its parent's (the shared
+		// cache prefix) and a mid-session tool change only moves the tail.
+		if (guidelines) parts.push({ label: "the tool guidelines", text: guidelines });
 		assertSendablePrompt(parts, capture);
 		return parts.length > 0 ? parts.map((part) => part.text).join("\n\n") : undefined;
 	} finally {
@@ -372,7 +421,7 @@ function preambleAtLineStart(text: string): number {
 
 function projectCustom(
 	capture: PromptCapture,
-	options: { skillReadTool: SkillReadTool },
+	options: ProjectionOptions,
 	visiting: Set<PromptCapture>,
 ): string | undefined {
 	if (!capture.custom || capture.inherited.length === 0) return capture.custom;

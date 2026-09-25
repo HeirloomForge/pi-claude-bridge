@@ -1630,6 +1630,7 @@ function streamClaudeAgentSdk(model: Model<any>, context: Context, options?: Sim
 	const systemPromptAppend = promptCapture
 		? projectPromptCapture(promptCapture, {
 			skillReadTool: mcpTools.some((tool) => tool.name === "read") ? "mcp" : "none",
+			exposedTools: mcpTools.map((tool) => tool.name),
 		})
 		: undefined;
 
@@ -2146,6 +2147,8 @@ export default function (pi: ExtensionAPI) {
 		contextFiles?: { path: string; content: string }[];
 		skills?: Parameters<typeof promptCaptures.record>[1]["skills"];
 		selectedTools?: string[];
+		toolGuidelines?: Record<string, string[]>;
+		promptGuidelines?: string[];
 	} | undefined) {
 		if (!systemPrompt) return;
 		const hasRead = !options?.selectedTools || options.selectedTools.includes("read");
@@ -2154,6 +2157,8 @@ export default function (pi: ExtensionAPI) {
 			append: options?.appendSystemPrompt,
 			contextFiles: options?.contextFiles ?? [],
 			skills: hasRead ? options?.skills ?? [] : [],
+			toolGuidelines: options?.toolGuidelines,
+			promptGuidelines: options?.promptGuidelines,
 		}, source);
 	}
 	pi.on("before_agent_start", (event) => {

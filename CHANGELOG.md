@@ -2,6 +2,8 @@
 
 ## UNRELEASED
 
+- **Add: forward tool and extension guidelines** — the projected prompt now carries pi's guideline bullets (each tool's `promptGuidelines`, and extension-wide ones) for the tools the query exposes, deduplicated, after the other portable parts so a sub-agent still shares its parent's prefix. Pi's generic rules, identity line and docs pointers stay dropped, and the block passes the same harness-text refusal. Previously 32 bullets across 14 tools in a Tidy session (edit batching, `ci_watch` after landing, browser tooling) never reached Claude.
+
 - **Add: Bridge-native subscription usage bars** — publish five-hour and weekly utilization and reset countdowns to Powerbar from the existing Claude Code SDK stream only. No credential reads, direct usage endpoint requests, or additional model calls. Missing or expired observations show `?`, and bars clear when switching away from the Bridge. Enable the dedicated segments as described in FORK.md.
 
 - **Bump: patched transitive dependencies (TIDY-19202)** — refresh the lockfile within existing version ranges to resolve the seven npm audit findings reported during fork installation.
