@@ -3,6 +3,12 @@
 ## UNRELEASED
 
 - **Bump: Claude Sonnet 5.5** — Should appear in `/model` with 1M context once pi-ai ships the new catalog entry. Agent SDK bumped to ^0.3.284 (Claude Code 2.1.284).
+- **Add: forward tool and extension guidelines** — the projected prompt now carries pi's guideline bullets (each tool's `promptGuidelines`, and extension-wide ones) for the tools the query exposes, deduplicated, after the other portable parts so a sub-agent still shares its parent's prefix. Pi's generic rules, identity line and docs pointers stay dropped, and the block passes the same harness-text refusal. Previously 32 bullets across 14 tools in a Tidy session (edit batching, `ci_watch` after landing, browser tooling) never reached Claude.
+
+- **Add: Bridge-native subscription usage bars** — publish five-hour and weekly utilization and reset countdowns to Powerbar from the existing Claude Code SDK stream only. No credential reads, direct usage endpoint requests, or additional model calls. Missing or expired observations show `?`, and bars clear when switching away from the Bridge. Enable the dedicated segments as described in FORK.md.
+
+- **Bump: patched transitive dependencies (TIDY-19202)** — refresh the lockfile within existing version ranges to resolve the seven npm audit findings reported during fork installation.
+
 - **Fix: resume after overflow compaction (TIDY-19202)** — distinguish Pi's explicit compact-and-retry from an orphaned tool result. Rebuild all retained tool history before issuing a continuation, rather than silently returning an empty stop. Covered by offline provider tests and a live Claude checkpoint probe. (Fork patch, reworked onto upstream's per-session state.)
 - **Add: external compaction ownership (TIDY-19202)** — `provider.takeOverCompaction` defaults to `false` in the HeirloomForge fork, so a local compaction extension supplies the summary without the bridge running a second Claude summary and overwriting it. Restoring the upstream handler requires explicit `true`.
 
