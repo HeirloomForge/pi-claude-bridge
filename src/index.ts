@@ -1806,9 +1806,9 @@ function streamClaudeAgentSdk(model: Model<any>, context: Context, options?: Sim
 	// rebuild instead — that one has somewhere to deliver the result to.
 	const lastMsg = context.messages[context.messages.length - 1];
 	const piSessionKey = options?.sessionId ?? null;
-	const recoveringToolResult =
-		piSessionKey !== null && retryAfterCompactionBySession.has(piSessionKey) && lastMsg?.role === "toolResult";
-	if (piSessionKey !== null) retryAfterCompactionBySession.delete(piSessionKey);
+	const retryKey = sessionKey(piSessionKey);
+	const recoveringToolResult = retryAfterCompactionBySession.has(retryKey) && lastMsg?.role === "toolResult";
+	retryAfterCompactionBySession.delete(retryKey);
 	if (lastMsg?.role === "toolResult" && !rewrittenUnderQuery && !recoveringToolResult) {
 		debug(`provider: orphaned tool result after abort, emitting end_turn`);
 		// With no query in flight anywhere, the top-level session this result
@@ -2541,14 +2541,17 @@ debug(`${event}: clearing ${sharedSessions.size} shared session${sharedSessions.
 	// Fork patch (TIDY-19202): a compaction that pi will retry (willRetry) arms
 	// this session for a tool-tail continuation resume on the next provider call.
 	pi.on("session_compact", (event, ctx) => {
-		const sid = ctx.sessionManager.getSessionId();
-		if (event.willRetry && sid) retryAfterCompactionBySession.add(sid);
-		else if (sid) retryAfterCompactionBySession.delete(sid);
+		const sid = ctx?.sessionManager?.getSessionId?.() ?? null;
+		// Keyed like the mirrors: a session id arms only that session; an
+		// unattributed event (tests, hosts without sessionManager) shares the
+		// "(none)" bucket with unattributed provider calls.
+		if (event.willRetry) retryAfterCompactionBySession.add(sessionKey(sid));
+		else retryAfterCompactionBySession.delete(sessionKey(sid));
 		sponsorMarkRebuildForSession(sid, `session_compact:${event.reason}:willRetry=${event.willRetry}`);
 	});
 	pi.on("session_tree", (_event, ctx) => {
-		const sid = ctx.sessionManager.getSessionId();
-		if (sid) retryAfterCompactionBySession.delete(sid);
+		const sid = ctx?.sessionManager?.getSessionId?.() ?? null;
+		retryAfterCompactionBySession.delete(sessionKey(sid));
 		sponsorMarkRebuildForSession(sid, "session_tree");
 	});
 
