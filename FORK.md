@@ -9,6 +9,7 @@ Our changes are limited to:
 - Resuming retained tool-result history after Pi's explicit compact-and-retry.
 - Defaulting `provider.takeOverCompaction` to `false`. Our workstation compactor owns session compaction. Setting it to `true` explicitly restores upstream behavior.
 - Passive subscription usage bars sourced only from Claude Code SDK events.
+- Restoring captured custom-section order after transcript replay, with complete byte-for-byte validation (not fuzzy prompt adoption).
 - Regression tests and this documentation.
 - Patched transitive dependencies within upstream's declared version ranges.
 
@@ -82,9 +83,13 @@ git merge upstream/main
 npm ci --ignore-scripts
 npm run typecheck
 npm run test:unit
-node --import tsx tests/int-compact-retry.mjs
+# Also test against the actual Pi host, rather than only package.json's dev peers:
+PI_COMPAT_HOST_ROOT="$(npm root -g)/@earendil-works/pi-coding-agent" npm run test:unit
+node --env-file-if-exists=.env.test --import tsx tests/int-compact-retry.mjs
 ```
 
 Inspect the merge, especially `session_before_compact`, `session_compact`, tool-result routing, and session import. Resolve any conflict by preserving external compaction as the default. Run the local-compactor tests in pi-config too, then push the tested fork commit and update the full SHA in pi-config's `agent/settings.json`. `pi update --extensions` installs the pinned ref; it does not advance that pin to a newer upstream commit.
+
+`PI_COMPAT_HOST_ROOT` can point at a staged candidate package before updating global Pi. The suite's preload resolves Pi peers from that host, catching compatibility breaks that tests against our development dependencies would miss. In pi-config, `agent/bin/pi-upgrade X.Y.Z` stages a specific Pi release and runs our offline startup/theme, compaction/orchestrator and bridge gates. `--install` additionally runs a live compact-retry probe and refuses to replace a runtime while Pi sessions are running. Extension pins advance separately after their tests; do not use an unqualified daily `pi update --all` on the working setup.
 
 Prefer sending the generic recovery fix and configurable ownership upstream when authorized. If upstream adopts both, keep only our external-compaction default or configure the upstream equivalent, then retire the fork once its tests pass against the released package. No automated merges or direct edits to npm's installed files.

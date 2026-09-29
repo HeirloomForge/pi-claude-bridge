@@ -15,11 +15,9 @@ import {
 	type SystemMessage,
 } from "@earendil-works/pi-ai";
 
-/** pi's canonical built-in section order; custom sections follow their replay position.
- *  Known limitation, inherited from the pre-swap replay: if pi reorders existing custom
- *  sections while patching an unrelated one, the replay diverges from getSystemPrompt()
- *  and the exact-key capture lookup throws on that legitimate turn. Untriggered today:
- *  pi builds custom sections in one patch per render. */
+/** pi's canonical built-in section order. Custom order comes from the captured
+ *  prompt options, not Map insertion order: a newly discovered section may precede
+ *  one retained by compaction even though its transcript patch arrives later. */
 const SECTION_RANK = new Map<string, number>([
 	["preamble", 0], ["tools", 1], ["rules", 2], ["docs", 3], ["addendum", 4],
 	["project_context", 5], ["skills", 6], ["cwd", 7],
@@ -42,12 +40,19 @@ function stableRanked(sections: Map<string, string>, ranks: Map<string, number>)
 }
 
 /** Render replayed system state in the same section order as pi's prompt builder. */
-function canonicalSystemPrompt(message: SystemMessage | undefined): string | undefined {
+export function canonicalSystemPrompt(
+	message: SystemMessage | undefined,
+	customSectionOrder?: readonly string[],
+): string | undefined {
 	if (!message) return undefined;
+	const ranks = new Map(SECTION_RANK);
+	for (const name of customSectionOrder ?? []) {
+		if (!ranks.has(name)) ranks.set(name, ranks.size);
+	}
 	const sections = new Map<string, string>(
 		Object.entries(message.sections ?? {}).filter((entry): entry is [string, string] => entry[1] !== null),
 	);
-	const parts = [contentText(message.content), ...stableRanked(sections, SECTION_RANK).values()]
+	const parts = [contentText(message.content), ...stableRanked(sections, ranks).values()]
 		.filter((part) => part.length > 0);
 	return parts.length > 0 ? parts.join("\n\n") : undefined;
 }
@@ -57,12 +62,15 @@ function canonicalSystemPrompt(message: SystemMessage | undefined): string | und
  * messages from conversation history. Contexts without system messages are returned
  * unchanged because systemless one-off calls already use the bridge-compatible shape.
  */
-export function toBridgeContext(context: Context): Context {
+export function toBridgeContext(
+	context: Context,
+	renderPrompt: (message: SystemMessage | undefined) => string | undefined = canonicalSystemPrompt,
+): Context {
 	if (!context.messages.some((message) => message.role === "system")) return context;
 	const tools = getCurrentTools(context.messages);
 	return {
 		...context,
-		systemPrompt: canonicalSystemPrompt(getCurrentSystemMessage(context.messages)),
+		systemPrompt: renderPrompt(getCurrentSystemMessage(context.messages)),
 		tools: tools.length > 0 ? tools : undefined,
 		messages: nonSystemMessages(context.messages),
 	};

@@ -1726,8 +1726,9 @@ function streamClaudeAgentSdk(model: Model<any>, context: Context, options?: Sim
 	showStartupNoticeOnce();
 	// pi hands providers a transcript (prompt/tools folded into system messages) — fold it
 	// back out to the prompt/tools fields every cursor write, syncSharedSession call and
-	// prompt-capture lookup below assumes (issue #106).
-	context = toBridgeContext(context);
+	// prompt-capture lookup below assumes (issue #106). Restore custom section
+	// order only when the complete replay matches a captured canonical prompt.
+	context = toBridgeContext(context, (message) => promptCaptures.canonicalizeSystemMessage(message));
 
 	// One-off summarizer calls arrive HERE too, not only via isolatedStreamFn: /bug report
 	// (summarizeForBugReport) routes through agent.streamFunction -> streamSimple, with no
@@ -2438,10 +2439,12 @@ debug(`${event}: clearing ${sharedSessions.size} shared session${sharedSessions.
 		selectedTools?: string[];
 		toolGuidelines?: Record<string, string[]>;
 		promptGuidelines?: string[];
+		sections?: Record<string, string>;
 	} | undefined) {
 		if (!systemPrompt) return;
 		const hasRead = !options?.selectedTools || options.selectedTools.includes("read");
 		promptCaptures.record(systemPrompt, {
+			customSectionOrder: Object.keys(options?.sections ?? {}),
 			custom: options?.customPrompt,
 			append: options?.appendSystemPrompt,
 			contextFiles: options?.contextFiles ?? [],

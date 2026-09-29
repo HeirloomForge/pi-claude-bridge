@@ -1,4 +1,6 @@
 import type { Skill } from "@earendil-works/pi-coding-agent";
+import type { SystemMessage } from "@earendil-works/pi-ai";
+import { canonicalSystemPrompt } from "./transcript.js";
 import { formatProjectContext } from "./agents-md.js";
 import { MCP_TOOL_PREFIX, renderSkillsBlock, type SkillReadTool } from "./skills.js";
 
@@ -6,6 +8,8 @@ import { MCP_TOOL_PREFIX, renderSkillsBlock, type SkillReadTool } from "./skills
 // portable parts after Claude Code's own preset.
 
 export type PromptCaptureInput = {
+	/** Extension section order at the capture boundary, copied before later mutations. */
+	customSectionOrder?: string[];
 	custom?: string;
 	append?: string;
 	contextFiles: { path: string; content: string }[];
@@ -86,6 +90,7 @@ export class PromptCaptures {
 			inherited: [],
 		};
 
+		capture.customSectionOrder = input.customSectionOrder ? [...input.customSectionOrder] : undefined;
 		capture.custom = input.custom;
 		capture.append = input.append;
 		capture.contextFiles = input.contextFiles.map((file) => ({ ...file }));
@@ -100,6 +105,22 @@ export class PromptCaptures {
 		// Mutate an existing node in place so descendants retain a live reference,
 		// then re-insert its key so Map order tracks recency.
 		this.touch(systemPrompt, capture);
+	}
+
+	/** Restore only a proven ordering of the complete replayed system state. Pi's
+	 *  section deltas do not record reordering of unchanged sections, so Map replay
+	 *  can differ from its builder. Never adopt a nearby prompt or ignore a section:
+	 *  all replayed content must render byte-for-byte as an actual recorded key. */
+	canonicalizeSystemMessage(message: SystemMessage | undefined): string | undefined {
+		const replayed = canonicalSystemPrompt(message);
+		if (!replayed || this.captures.has(replayed)) return replayed;
+		for (const capture of [...this.captures.values()].reverse()) {
+			if (!capture.customSectionOrder?.length) continue;
+			const ordered = canonicalSystemPrompt(message, capture.customSectionOrder);
+			if (ordered === capture.assembledPrompt) return ordered;
+		}
+		// Keep the unaccounted-for prompt intact; resolveOrDerive will fail closed.
+		return replayed;
 	}
 
 	/** Exact lookup only. Callers serving a query want `resolveOrDerive`. */

@@ -13,6 +13,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import { __test } from "../src/index.js";
+import { PromptCaptures } from "../src/prompt-capture.js";
 
 const { toBridgeContext } = __test;
 
@@ -81,6 +82,32 @@ describe("toBridgeContext section replay order", () => {
 			userMessage("go"),
 		];
 		assert.equal(replayedSystemPrompt(messages), ["P", "T", "R", "D", "S", "/w"].join("\n\n"));
+	});
+
+	it("resolves a newly discovered custom section ahead of one retained by compaction", () => {
+		const sections = { preamble: "P", tools: "T", cwd: "/w", session_identity: "IDENTITY" };
+		const canonical = ["P", "T", "/w", "AGENTS", "IDENTITY"].join("\n\n");
+		const captures = new PromptCaptures();
+		captures.record(canonical, {
+			contextFiles: [{ path: "/policy", content: "Keep this policy" }], skills: [],
+			customSectionOrder: ["advertised_subagents", "session_identity"],
+		}, "turn_start");
+		const messages = [systemMessage({ sections }),
+			systemMessage({ sections: { advertised_subagents: "AGENTS" } }), userMessage("go")];
+		const context = toBridgeContext({ messages }, (message) => captures.canonicalizeSystemMessage(message));
+		assert.equal(context.systemPrompt, canonical);
+		assert.equal(captures.resolveOrDerive(context.systemPrompt).contextFiles[0].content, "Keep this policy");
+	});
+
+	it("does not adopt a section-order capture when any section content changed", () => {
+		const captures = new PromptCaptures();
+		captures.record(["P", "/w", "AGENTS", "IDENTITY"].join("\n\n"), {
+			contextFiles: [], skills: [], customSectionOrder: ["advertised_subagents", "session_identity"],
+		}, "turn_start");
+		const context = toBridgeContext({ messages: [systemMessage({ sections: {
+			preamble: "P", cwd: "/w", session_identity: "IDENTITY", advertised_subagents: "CHANGED",
+		} })] }, (message) => captures.canonicalizeSystemMessage(message));
+		assert.throws(() => captures.resolveOrDerive(context.systemPrompt), /no capture for this/);
 	});
 
 	it("joins text-array content like string content", () => {

@@ -2,6 +2,8 @@
 
 ## UNRELEASED
 
+- **Fix: custom prompt section order after compaction** — capture extension section order at the prompt boundaries and restore it when transcript deltas retain older sections ahead of newly discovered ones. The entire reordered prompt must match an actual capture byte-for-byte; changed or missing instructions still fail closed. Fixes the session-identity/subagent-discovery mismatch without changing external compaction ownership.
+
 - **Bump: Claude Sonnet 5.5** — Should appear in `/model` with 1M context once pi-ai ships the new catalog entry. Agent SDK bumped to ^0.3.284 (Claude Code 2.1.284).
 - **Add: forward tool and extension guidelines** — the projected prompt now carries pi's guideline bullets (each tool's `promptGuidelines`, and extension-wide ones) for the tools the query exposes, deduplicated, after the other portable parts so a sub-agent still shares its parent's prefix. Pi's generic rules, identity line and docs pointers stay dropped, and the block passes the same harness-text refusal. Previously 32 bullets across 14 tools in a Tidy session (edit batching, `ci_watch` after landing, browser tooling) never reached Claude.
 
