@@ -1224,6 +1224,32 @@ function finalizeCurrentStream(c: QueryContext, stopReason?: string): void {
 	c.currentPiStream = null;
 }
 
+/** Claude Code takes its endpoint from its own settings, so a user-level
+ *  ANTHROPIC_BASE_URL (a local model router, a gateway) can answer with a different
+ *  model while system/init still names the requested one. message_start carries the
+ *  model that actually answered. Warned once per requested/served pair. */
+const warnedServedModels = new Set<string>();
+
+/** Same model, allowing a dated snapshot of the requested alias (claude-haiku-4-5-20251001). */
+function isRequestedModel(requested: string, served: string): boolean {
+	const [a, b] = [requested, served].map((id) => id.toLowerCase().replace(/\[1m\]$/, ""));
+	return a === b || b.startsWith(`${a}-`) || a.startsWith(`${b}-`);
+}
+
+function checkServedModel(model: Model<any>, served: unknown): void {
+	if (typeof served !== "string" || !served || isRequestedModel(model.id, served)) return;
+	debug(`provider: requested ${model.id} but ${served} answered`);
+	const pair = `${model.id}\n${served}`;
+	if (warnedServedModels.has(pair)) return;
+	warnedServedModels.add(pair);
+	diagDump("served_model_mismatch", { requested: model.id, served });
+	piUI?.notify(
+		`Claude bridge: requested ${model.id}, but ${served} answered. Claude Code's own settings route this model elsewhere; `
+		+ `check ANTHROPIC_BASE_URL and the model env in ~/.claude/settings.json.`,
+		"warning",
+	);
+}
+
 /** Maps Anthropic stream events to pi stream events (text, thinking, toolcall).
  *  On message_stop with tool_use: ends currentPiStream so pi can execute the tool. */
 function processStreamEvent(
@@ -1244,6 +1270,7 @@ function processStreamEvent(
 		c.turnStreamMessageId = event.message?.id;
 		c.turnStreamOpen = true;
 		c.turnStreamBlockStart = c.turnBlocks.length;
+		checkServedModel(model, event.message?.model);
 		if (event.message?.usage) recordUsage(c.turnOutput, event.message.usage, model);
 		return;
 	}

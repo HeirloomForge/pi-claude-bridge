@@ -11,6 +11,7 @@ Our changes are limited to:
 - Passive subscription usage bars sourced only from Claude Code SDK events.
 - Restoring captured custom-section order after transcript replay, with complete byte-for-byte validation (not fuzzy prompt adoption).
 - Loading the bridge into pi-subagents foreground children. They run in the parent's process with its provider registry but without ambient extensions, so no bridge hook captured their prompts and every turn failed closed. The bridge appends itself to the session's required child extensions at `before_agent_start` (`src/subagent-children.ts`), after Tidy's guards register theirs at `session_start`.
+- Warning when a model other than the requested one answers (`message_start.model`). On this workstation, `~/.claude/settings.json` points Claude Code at the local haiku-router (`127.0.0.1:8787`), which sends every id containing "sonnet" to a local model. So `claude-bridge/claude-sonnet-5-5` was answered by `glm-5.3-flash-exl3`, while Opus ids pass through to Anthropic.
 - Regression tests and this documentation.
 - Patched transitive dependencies within upstream's declared version ranges.
 
