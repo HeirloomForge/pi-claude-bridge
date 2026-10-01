@@ -7,6 +7,7 @@ import { Text } from "@earendil-works/pi-tui";
 import { createSession, deleteSession, openSession, repairToolPairing } from "cc-session-io";
 import { appendFileSync, mkdirSync, realpathSync, statSync } from "fs";
 import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import { PROVIDER_ID, messageContentToText, convertPiMessages } from "./convert.js";
 import { DEBUG_LOG_PATH, DIAG_LOG_PATH } from "./log-paths.js";
 import { applyLongContext, buildModels, claudeCodeModelId, type LongContextSettings, resolveModel as _resolveModel } from "./models.js";
@@ -28,6 +29,7 @@ import { buildActionSummary, type ToolCallState } from "./askclaude-ui.js";
 import { askClaudeCallTags, askClaudeToolDescription, buildAskClaudeParams, resolveAskClaudeDefaults, resolveAskClaudeMode, type AskClaudeMode } from "./askclaude-schema.js";
 import { nonSystemMessages, toBridgeContext } from "./transcript.js";
 import { SubscriptionUsage } from "./subscription-usage.js";
+import { SubagentChildRequirement } from "./subagent-children.js";
 import { updateUsage, type SdkUsage } from "./usage.js";
 
 // A shared provider can serve several extension runtimes. Headless children must
@@ -2426,6 +2428,9 @@ debug(`${event}: clearing ${sharedSessions.size} shared session${sharedSessions.
 			g[ACTIVE_STREAM_SIMPLE_KEY] = undefined;
 		}
 	};
+	// Foreground subagent children capture their prompts only if they load the bridge;
+	// see subagent-children.ts. Required from before_agent_start, below.
+	const subagentChildren = new SubagentChildRequirement(fileURLToPath(import.meta.url));
 	pi.on("session_start", (event, ctx) => {
 		piUI = ctx.ui;
 		piMode = ctx.mode;
@@ -2469,7 +2474,11 @@ debug(`${event}: clearing ${sharedSessions.size} shared session${sharedSessions.
 			promptGuidelines: options?.promptGuidelines,
 		}, source);
 	}
-	pi.on("before_agent_start", (event) => {
+	pi.on("before_agent_start", (event, ctx) => {
+		// Not at session_start: hosts register the session's required child extensions
+		// there, through an API that refuses a session already holding an entry. Every
+		// subagent the model launches comes after this point.
+		subagentChildren.require(ctx?.sessionManager?.getSessionId?.());
 		lastSystemPromptOptions = event.systemPromptOptions;
 		recordSystemPrompt("before_agent_start", event.systemPrompt, event.systemPromptOptions);
 	});
@@ -2500,6 +2509,7 @@ debug(`${event}: clearing ${sharedSessions.size} shared session${sharedSessions.
 		recordSystemPrompt("turn_start", ctx.getSystemPrompt(), lastSystemPromptOptions);
 	});
 	pi.on("session_shutdown", () => {
+		subagentChildren.release();
 		subscriptionObservers.delete(subscriptionUsage);
 		subscriptionUsage.stop();
 		reportLeaks("session_shutdown");

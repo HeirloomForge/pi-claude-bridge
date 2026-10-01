@@ -10,6 +10,7 @@ Our changes are limited to:
 - Defaulting `provider.takeOverCompaction` to `false`. Our workstation compactor owns session compaction. Setting it to `true` explicitly restores upstream behavior.
 - Passive subscription usage bars sourced only from Claude Code SDK events.
 - Restoring captured custom-section order after transcript replay, with complete byte-for-byte validation (not fuzzy prompt adoption).
+- Loading the bridge into pi-subagents foreground children. They run in the parent's process with its provider registry but without ambient extensions, so no bridge hook captured their prompts and every turn failed closed. The bridge appends itself to the session's required child extensions at `before_agent_start` (`src/subagent-children.ts`), after Tidy's guards register theirs at `session_start`.
 - Regression tests and this documentation.
 - Patched transitive dependencies within upstream's declared version ranges.
 
