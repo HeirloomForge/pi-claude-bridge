@@ -2,6 +2,7 @@ import type { Skill } from "@earendil-works/pi-coding-agent";
 import type { SystemMessage } from "@earendil-works/pi-ai";
 import { canonicalSystemPrompt } from "./transcript.js";
 import { formatProjectContext } from "./agents-md.js";
+import { DEBUG_LOG_PATH } from "./log-paths.js";
 import { MCP_TOOL_PREFIX, renderSkillsBlock, type SkillReadTool } from "./skills.js";
 
 // What pi assembled for one agent, kept so the bridge can append only the
@@ -443,7 +444,7 @@ function assertSendablePrompt(parts: readonly PromptPart[], capture: PromptCaptu
 		`  Capture: ${capture.source ?? "unknown"}, ${capture.inherited.length} inherited capture(s) substituted.`,
 		"  If this came from an inherited pi prompt, see README \"Compatibility with other extensions\".",
 		"  If it is your own text, reword or remove it. CLAUDE_BRIDGE_DEBUG=1 writes the full prompt to",
-		"  ~/.pi/agent/claude-bridge.log.",
+		`  ${DEBUG_LOG_PATH}.`,
 	].join("\n"));
 }
 

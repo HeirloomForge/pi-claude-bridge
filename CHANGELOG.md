@@ -4,7 +4,6 @@
 
 - **Fix: custom prompt section order after compaction** — capture extension section order at the prompt boundaries and restore it when transcript deltas retain older sections ahead of newly discovered ones. The entire reordered prompt must match an actual capture byte-for-byte; changed or missing instructions still fail closed. Fixes the session-identity/subagent-discovery mismatch without changing external compaction ownership.
 
-- **Bump: Claude Sonnet 5.5** — Should appear in `/model` with 1M context once pi-ai ships the new catalog entry. Agent SDK bumped to ^0.3.284 (Claude Code 2.1.284).
 - **Add: forward tool and extension guidelines** — the projected prompt now carries pi's guideline bullets (each tool's `promptGuidelines`, and extension-wide ones) for the tools the query exposes, deduplicated, after the other portable parts so a sub-agent still shares its parent's prefix. Pi's generic rules, identity line and docs pointers stay dropped, and the block passes the same harness-text refusal. Previously 32 bullets across 14 tools in a Tidy session (edit batching, `ci_watch` after landing, browser tooling) never reached Claude.
 
 - **Add: Bridge-native subscription usage bars** — publish five-hour and weekly utilization and reset countdowns to Powerbar from the existing Claude Code SDK stream only. No credential reads, direct usage endpoint requests, or additional model calls. Missing or expired observations show `?`, and bars clear when switching away from the Bridge. Enable the dedicated segments as described in FORK.md.
@@ -13,6 +12,15 @@
 
 - **Fix: resume after overflow compaction (TIDY-19202)** — distinguish Pi's explicit compact-and-retry from an orphaned tool result. Rebuild all retained tool history before issuing a continuation, rather than silently returning an empty stop. Covered by offline provider tests and a live Claude checkpoint probe. (Fork patch, reworked onto upstream's per-session state.)
 - **Add: external compaction ownership (TIDY-19202)** — `provider.takeOverCompaction` defaults to `false` in the HeirloomForge fork, so a local compaction extension supplies the summary without the bridge running a second Claude summary and overwriting it. Restoring the upstream handler requires explicit `true`.
+
+## 0.9.1 — 2026-09-30
+
+- **Bump: Claude Sonnet 5.5 and pi-ai 0.99.1** — pi-ai update brings `claude-sonnet-5-5` with 1M context. Agent SDK now requires `^0.3.284`.
+- **Tests: add PR CI** — Run unit tests on GitHub Actions without Claude credentials.
+- **Fix: write the debug and diagnostics logs into pi's agent dir (#147)** — Honour `PI_CODING_AGENT_DIR` instead of always writing to (and recreating) `~/.pi/agent`; `CLAUDE_BRIDGE_DEBUG_PATH` still overrides the debug log. Thanks @Susensio.
+- **Fix: unresolvable or refused system prompt ends the turn as a stream error (#124)** — The prompt-capture checks end the returned stream with an error event instead of throwing out of the provider call, so callers outside pi's agent loop see a failed turn too. The fallback to the freshest capture proposed in #124 is not included: an unmatched mid-query turn still fails, now as a failed turn rather than a throw. Thanks @jmtoepperwien.
+- **Add: name pi#5581 when an extension-triggered turn's prompt can't be matched (#144)** — An idle `sendMessage` with `triggerTurn` skips `before_agent_start`, so its prompt lacks that turn's extension additions. The turn still fails, but the error now says so and suggests sending a user message instead.
+- **Fix: thinking tokens never reached pi's `usage.reasoning` (#139)** — Read the SDK's nested `output_tokens_details.thinking_tokens`, as pi's own Anthropic provider does. Reasoning stays a subset of output tokens and out of cost. Thanks @cmembreno048.
 
 ## 0.9.0 — 2026-09-27
 
