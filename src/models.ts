@@ -84,6 +84,8 @@ export type ClaudeCodeRuntimeModel = {
 const MEASURED_ONE_M = new Set([
 	"claude-fable-5",
 	"claude-fable-5-1",
+	// bare serves 200K, [1m] serves 1M (Max, CC 2.1.319, 2026-11-10).
+	"claude-fable-5-2",
 	"claude-opus-5-5",
 	"claude-opus-5",
 	"claude-opus-4-8",

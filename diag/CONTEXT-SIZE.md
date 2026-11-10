@@ -65,6 +65,10 @@ the footnote below the table).
 | `claude-opus-4-6[1m]`    | 429              | 1M              | 1M               | 1M              |
 | `claude-fable-5`          | 429§             | 1M              | —                | —               |
 | `claude-fable-5[1m]`     | 429§             | 1M              | —                | —               |
+| `claude-fable-5-1`        | —                | —               | 1M¶              | —               |
+| `claude-fable-5-1[1m]`   | —                | —               | 1M¶              | —               |
+| `claude-fable-5-2`        | —                | —               | 200K¶            | —               |
+| `claude-fable-5-2[1m]`   | —                | —               | 1M¶              | —               |
 | `claude-sonnet-5`         | 1M§              | 1M              | —                | —               |
 | `claude-sonnet-5[1m]`    | 1M               | 1M              | —                | —               |
 | `claude-sonnet-4-6`       | 200K             | 200K            | 200K             | 200K            |
@@ -99,6 +103,10 @@ keep their `[1m]` credits gate (`PLAN_GATED_ONE_M` still required).
 error-field capture; its three rejected `[1m]` rows have no recorded HTTP status
 or error text. `opus-4-6[1m]` was confirmed 429 via a separate one-off dump;
 `sonnet-4-6[1m]` and `haiku-4-5[1m]` are assumed the same by analogy.
+
+¶ **Added 2026-11-10 (Max, credits off, SDK 0.3.285, Claude Code 2.1.319).** Only
+the fable rows were probed. `fable-5-2` is the first current model whose bare id
+serves 200K on Max, so it needs `[1m]`.
 
 § **Changed 2026-09-28 (Pro credits off, SDK 0.3.284).** `fable-5` went from
 serving (bare 200K, `[1m]` 1M in June) to rejecting both variants with 429
