@@ -158,7 +158,13 @@ describe("applyLongContext", () => {
 	});
 
 	it("haiku shortcut and no-match still resolve", () => {
-		assert.equal(resolveModel(models, "haiku")?.id, "claude-haiku-4-5");
+		// Same philosophy as the opus shortcut test: resolve to the newest haiku
+		// the connected pi-ai catalog carries, so a new Anthropic haiku keeps
+		// this green without edits. A dev clone's older peers (haiku-4-5) and a
+		// candidate host's newer ones (haiku-5-5) both pass.
+		const newestHaiku = models.find((m) => m.id.includes("haiku"));
+		assert.ok(newestHaiku, "catalog contains a haiku model");
+		assert.equal(resolveModel(models, "haiku")?.id, newestHaiku.id);
 		assert.equal(resolveModel(models, "gpt-9"), undefined);
 	});
 
